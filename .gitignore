@@ -5,6 +5,7 @@ build/
 # Editor / OS junk
 .vscode/
 .devcontainer/
+dependencies.lock
 *.swp
 *.log
 .DS_Store
