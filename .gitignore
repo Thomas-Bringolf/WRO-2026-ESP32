@@ -1,0 +1,10 @@
+# ESP-IDF build output
+build/
+
+
+# Editor / OS junk
+.vscode/
+.devcontainer/
+*.swp
+*.log
+.DS_Store
