@@ -3,3 +3,9 @@ version: "1.0.0"
 dependencies:
   idf:
     version: ">=5.5.1"
+  esp-idf-lib/ads111x:
+    version: ">=1.0.1"
+  esp-idf-lib/esp_idf_lib_helpers:
+    version: '*'
+  esp-idf-lib/i2cdev:
+    version: '*'

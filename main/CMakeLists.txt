@@ -1,8 +1,9 @@
 idf_component_register(
     SRCS
-        "app_main.c"
-        "motor.c"
+        "main.c"
+        "motors.c"
         "spi.c"
+        "analog.c"
     INCLUDE_DIRS
         "."
 )

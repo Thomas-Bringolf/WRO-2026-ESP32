@@ -1,8 +1,7 @@
-# ESP-IDF build output
 build/
+managed_components/
 
 
-# Editor / OS junk
 .vscode/
 .devcontainer/
 dependencies.lock

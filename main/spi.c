@@ -296,7 +296,10 @@ esp_err_t message_log(const SpiMessage *message)
 
 esp_err_t spi_slave_init(Spi *spi) {
 
-    ESP_ERROR_CHECK(spi_slave_initialize(spi->host, &(spi->buscfg), &(spi->slvcfg), spi->dma_chan));
+    if (spi_slave_initialize(spi->host, &(spi->buscfg), &(spi->slvcfg), spi->dma_chan) != ESP_OK) {
+        ESP_LOGE(TAG, "spi_slave_init(); spi_slave_initialize FAILED");
+        return ESP_FAIL;
+    }
 
     // RX buffer allocation (aligned for DMA)
     spi->recvbuf = spi_bus_dma_memory_alloc(spi->host, spi->bufsize, 0);
@@ -333,7 +336,7 @@ esp_err_t spi_slave_init(Spi *spi) {
     spi->transaction.rx_buffer = spi->recvbuf;
     spi->transaction.tx_buffer = spi->sendbuf;
 
-    ESP_LOGI(TAG, "spi_slave_init(); SPI initialized successfully");
+    ESP_LOGI(TAG, "SPI initialized successfully");
     return ESP_OK;
 }
 

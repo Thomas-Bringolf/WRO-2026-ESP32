@@ -1,5 +1,6 @@
-#include "motor.h"
+#include "motors.h"
 #include "spi.h"
+#include "analog.h"
 
 #include "freertos/FreeRTOS.h"
 #include "driver/spi_slave.h"
@@ -15,8 +16,10 @@
 #include <unistd.h>
 #include <string.h>
 
-// Motor
+//Relay
 #define PWRrelai 4
+
+// Motor
 #define MotorPWM 5
 #define MOTOR_DIR_PIN 6
 
@@ -30,6 +33,12 @@
 #define SPI_CS     14
 #define SPI_REQ    16
 #define SPI_RCV_HOST    SPI2_HOST
+
+// Analog
+#define I2C_ADDR 0x48   //connect ADDR to GND
+#define I2C_PORT_NUM I2C_NUM_0
+#define SDA_PIN 8
+#define SCL_PIN 9
 
 #define TAG "MAIN_MODULE"
 
@@ -76,11 +85,28 @@ void app_main(void) {
     };
     spi_slave_init(&spi);
 
+    AnalogSensor adc = {
+        .i2c_addr = I2C_ADDR,
+        .i2c_port = I2C_PORT_NUM,
+        .sda_pin = SDA_PIN,
+        .scl_pin = SCL_PIN,
+        .gain = ADS111X_GAIN_4V096,
+        .conversion_factor[0] = 1.0f,
+        .conversion_factor[1] = 1.0f,
+        .conversion_factor[2] = 1.0f,
+        .conversion_factor[3] = 1.0f
+    };
+    analog_init(&adc);
 
+    while (1) {
+        // Read all channels
+        analog_read(&adc);
 
+        // Log all channels
+        analog_log(&adc);
 
-    
-
+        vTaskDelay(pdMS_TO_TICKS(500)); // 500 ms delay
+    }
 }
 
 

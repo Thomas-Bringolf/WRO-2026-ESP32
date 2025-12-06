@@ -1,10 +1,3 @@
-#ifndef SPI_H
-#define SPI_H
-
-#include "driver/spi_slave.h"
-#include <stdint.h>
-
-
 /**
  * @file SPI.h
  * @brief SPI slave communication library for structured message exchange.
@@ -30,7 +23,11 @@
  *  - ChatGPT
  */
 
+#ifndef SPI_H
+#define SPI_H
 
+#include "driver/spi_slave.h"
+#include <stdint.h>
 
 
 /**
