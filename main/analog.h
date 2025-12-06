@@ -1,3 +1,30 @@
+/**
+ * @file analog.h
+ * @brief High-level interface for ADS111x / ADS1015 analog-to-digital converters.
+ *
+ * This module provides a clean abstraction for using ADS111x-compatible
+ * ADCs (including ADS1015 and ADS1115) on ESP-IDF systems. It handles
+ * I²C initialization, device configuration, channel selection, raw-to-voltage
+ * conversion, and structured logging of measured values.
+ *
+ * The interface is built around the @ref AnalogSensor structure, which stores
+ * all configuration parameters, per-channel scaling factors, and the most
+ * recent voltage readings.
+ *
+ * Typical usage flow:
+ *  - Fill an @ref AnalogSensor structure with I²C and ADC configuration
+ *  - Call @ref analog_init()
+ *  - Periodically call @ref analog_read()
+ *  - Optionally call @ref analog_log() for human-readable output
+ *
+ * This design allows multiple ADC instances, clear separation of hardware
+ * configuration and measurement logic, and predictable behavior suitable
+ * for control and data acquisition tasks.
+ *
+ * @note This module relies on the esp-idf-lib ADS111x driver and the i2cdev helper
+ *       library. Proper I²C pull-up resistors are required on SDA and SCL.
+ */
+
 #ifndef ANALOG_H
 #define ANALOG_H
 
@@ -7,17 +34,40 @@
 
 #define ANALOG_CHANNELS 4
 
+/**
+ * @brief Runtime descriptor for an ADS111x / ADS1015 analog sensor.
+ *
+ * This structure contains all configuration data and runtime state required
+ * to operate an ADS111x-family ADC. It encapsulates I²C configuration,
+ * gain settings, per-channel scaling factors, and the most recent voltage
+ * measurements.
+ *
+ * The ADC gain is global to the IC, while conversion factors and measurements
+ * are stored per-channel to support external voltage dividers or signal conditioning.
+ *
+ * Members `dev` and `last_voltage` are managed internally by the driver and
+ * must not be modified by the user after initialization.
+ *
+ * Typical lifecycle:
+ *  - Populate configuration fields (address, I²C port, pins, gain, scaling)
+ *  - Call @ref analog_init() to initialize hardware
+ *  - Periodically call @ref analog_read() to update measurements
+ *  - Use @ref analog_log() or access `last_voltage[]` directly
+ */
 typedef struct {
-    uint8_t i2c_addr;                 // I2C address of the ADC
-    i2c_port_t i2c_port;              // I2C port used
-    i2c_dev_t dev;                     // internal descriptor (ads111x)
-    int sda_pin;                       // SDA GPIO
-    int scl_pin;                       // SCL GPIO
-    ads111x_gain_t gain;               // Gain configuration (global for IC)
-    float gain_val;                    // Corresponding voltage per bit (global)
-    float conversion_factor[ANALOG_CHANNELS]; // Scaling per channel (voltage divider etc.)
-    float last_voltage[ANALOG_CHANNELS];     // Last read voltages for each channel
+    uint8_t i2c_addr;                 /**< I²C address of the ADC device */
+    i2c_port_t i2c_port;              /**< I²C port used by the device */
+    i2c_dev_t dev;                    /**< Internal ADS111x device descriptor */
+    int sda_pin;                      /**< GPIO used for I²C SDA */
+    int scl_pin;                      /**< GPIO used for I²C SCL */
+    ads111x_gain_t gain;              /**< Programmable gain (global to the IC) */
+    float gain_val;                   /**< Voltage range corresponding to the selected gain */
+    float conversion_factor[ANALOG_CHANNELS];
+                                       /**< Per-channel scaling factor (e.g. voltage divider) */
+    float last_voltage[ANALOG_CHANNELS];
+                                       /**< Last measured voltage per channel */
 } AnalogSensor;
+
 
 /**
  * @brief Initialize an ADS111x/ADS1015 sensor and prepare it for readings.

@@ -4,6 +4,7 @@ idf_component_register(
         "motors.c"
         "spi.c"
         "analog.c"
+        "encoder.c"
     INCLUDE_DIRS
         "."
 )

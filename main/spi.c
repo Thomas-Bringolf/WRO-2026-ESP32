@@ -3,7 +3,6 @@
 #include "driver/spi_slave.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-
 #include "esp_err.h"
 
 #include <stdio.h>
@@ -110,8 +109,7 @@ float message_toFloat32(const SpiMessage *message) {
 }
 
 
-esp_err_t message_setString(SpiMessage *message, const char *str)
-{
+esp_err_t message_setString(SpiMessage *message, const char *str) {
     if (!message || !str) {
         ESP_LOGE(TAG, "message_setString(); ESP_ERR_INVALID_ARG, no message or String given");
         return ESP_ERR_INVALID_ARG;
@@ -137,8 +135,7 @@ esp_err_t message_setString(SpiMessage *message, const char *str)
 }
 
 
-esp_err_t message_setUint16(SpiMessage *message, uint16_t value)
-{
+esp_err_t message_setUint16(SpiMessage *message, uint16_t value) {
     if (!message) {
         ESP_LOGE(TAG, "message_setUint16(); ESP_ERR_INVALID_ARG, null message pointer");
         return ESP_ERR_INVALID_ARG;
@@ -166,8 +163,7 @@ esp_err_t message_setUint16(SpiMessage *message, uint16_t value)
 }
 
 
-esp_err_t message_setFloat32(SpiMessage *message, float value)
-{
+esp_err_t message_setFloat32(SpiMessage *message, float value) {
     if (!message) {
         ESP_LOGE(TAG, "message_setFloat32(); ESP_ERR_INVALID_ARG, null message pointer");
         return ESP_ERR_INVALID_ARG;
@@ -201,8 +197,7 @@ esp_err_t message_setFloat32(SpiMessage *message, float value)
 }
 
 
-esp_err_t message_log(const SpiMessage *message)
-{
+esp_err_t message_log(const SpiMessage *message) {
     esp_log_level_set("*", ESP_LOG_DEBUG);
     esp_log_level_set("SPI_MODULE", ESP_LOG_DEBUG);
     if (!message) {
@@ -317,7 +312,7 @@ esp_err_t spi_slave_init(Spi *spi) {
     }
     memset(spi->sendbuf, 0, spi->bufsize);
 
-    // Set relay output pin
+    // Set REQ output pin
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << spi->req_pin),
         .mode = GPIO_MODE_OUTPUT,

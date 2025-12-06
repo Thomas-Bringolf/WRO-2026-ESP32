@@ -1,15 +1,17 @@
 #include "motors.h"
 #include "spi.h"
 #include "analog.h"
+#include "encoder.h"
 
 #include "freertos/FreeRTOS.h"
 #include "driver/spi_slave.h"
+#include "driver/pulse_cnt.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
-#include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_err.h"
+#include "esp_log.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,14 +19,14 @@
 #include <string.h>
 
 //Relay
-#define PWRrelai 4
+#define PWR_RELAI 4
 
 // Motor
-#define MotorPWM 5
-#define MOTOR_DIR_PIN 6
+#define MOTOR_PWM 5
+#define MOTOR_DIR 6
 
 // Servo
-#define SERVO_PWM_PIN 7
+#define SERVO_PWM 7
 
 // SPI
 #define SPI_MOSI   12
@@ -37,18 +39,21 @@
 // Analog
 #define I2C_ADDR 0x48   //connect ADDR to GND
 #define I2C_PORT_NUM I2C_NUM_0
-#define SDA_PIN 8
-#define SCL_PIN 9
+#define I2C_SDA 8
+#define I2C_SCL 9
+
+
+// Encoder
+#define ENCODER_CHANNEL_A   4
+#define ENCODER_CHANNEL_B   5
 
 #define TAG "MAIN_MODULE"
 
 void app_main(void) {
-    esp_log_level_set("*", ESP_LOG_DEBUG);
-    esp_log_level_set("SPI_MODULE", ESP_LOG_DEBUG);
 
     Motor motor = {
-        .pwm_pin = MotorPWM,
-        .dir_pin = MOTOR_DIR_PIN,
+        .pwm_pin = MOTOR_PWM,
+        .dir_pin = MOTOR_DIR,
         .current_speed = 0.0f,
         .step_size = 0.01f,       // speed increment per step
         .step_delay_ms = 10     // delay per step in ms
@@ -56,13 +61,32 @@ void app_main(void) {
     motor_init(&motor);
 
     Servo servo = {
-        .pwm_pin = SERVO_PWM_PIN,
+        .pwm_pin = SERVO_PWM,
         .min_duty = 500,
         .max_duty = 2500,
         .center_duty = 1500,
         .angle_range = 90
     };
     servo_init(&servo);
+
+    Encoder encoder = {
+        .channelA_pin = ENCODER_CHANNEL_A,
+        .channelB_pin = ENCODER_CHANNEL_B,
+    };
+    encoder_init(&encoder);
+
+    AnalogSensor adc = {
+        .i2c_addr = I2C_ADDR,
+        .i2c_port = I2C_PORT_NUM,
+        .sda_pin = I2C_SDA,
+        .scl_pin = I2C_SCL,
+        .gain = ADS111X_GAIN_4V096,
+        .conversion_factor[0] = 1.0f,
+        .conversion_factor[1] = 1.0f,
+        .conversion_factor[2] = 1.0f,
+        .conversion_factor[3] = 1.0f
+    };
+    analog_init(&adc);
 
     Spi spi = {
         .bufsize = 256,
@@ -84,20 +108,10 @@ void app_main(void) {
         .req_pin = SPI_REQ
     };
     spi_slave_init(&spi);
+}
 
-    AnalogSensor adc = {
-        .i2c_addr = I2C_ADDR,
-        .i2c_port = I2C_PORT_NUM,
-        .sda_pin = SDA_PIN,
-        .scl_pin = SCL_PIN,
-        .gain = ADS111X_GAIN_4V096,
-        .conversion_factor[0] = 1.0f,
-        .conversion_factor[1] = 1.0f,
-        .conversion_factor[2] = 1.0f,
-        .conversion_factor[3] = 1.0f
-    };
-    analog_init(&adc);
 
+/**
     while (1) {
         // Read all channels
         analog_read(&adc);
@@ -107,11 +121,7 @@ void app_main(void) {
 
         vTaskDelay(pdMS_TO_TICKS(500)); // 500 ms delay
     }
-}
-
-
-
-
+*/
 
 /**
     SpiMessage message = {0};
@@ -134,7 +144,7 @@ void app_main(void) {
 /**    
     bool keepOnGoing = true;
     while (keepOnGoing) {
-        motors_enable(PWRrelai);
+        motors_enable(PWR_RELAI);
         printf("Setting servo to -45 degrees\n");
         servo_sets_angle(&servo, -45);
 
@@ -165,5 +175,5 @@ void app_main(void) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         keepOnGoing = false;
     }
-    motors_disable(PWRrelai);
+    motors_disable(PWR_RELAI);
 */

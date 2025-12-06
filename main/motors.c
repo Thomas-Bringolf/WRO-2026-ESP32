@@ -1,16 +1,14 @@
 #include "motors.h"
 
-#include <stdio.h>
-
-#include "driver/gpio.h"
-#include "soc/gpio_struct.h"   
-
 #include "freertos/FreeRTOS.h"
+#include "soc/gpio_struct.h"   
 #include "freertos/task.h"
 #include "driver/ledc.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
+
+#include <stdio.h>
 
 #define MOTOR_PWM_FREQ_HZ 20000      // 10 kHz
 #define MOTOR_PWM_RESOLUTION LEDC_TIMER_10_BIT  //WARNING! Must be 10-bit, or else polarity flip will not work!
@@ -24,8 +22,7 @@
 
 #define TAG "MOTORS_MODULE"
 
-static void motor_apply_speed(Motor *m, float speed)
-{
+static void motor_apply_speed(Motor *m, float speed) {
     // Ensure speed is in [-1, 1] or clamp it
     if(speed > 1.0f) speed = 1.0f;
     if(speed < -1.0f) speed = -1.0f;
@@ -47,8 +44,7 @@ static void motor_apply_speed(Motor *m, float speed)
 }
 
 
-esp_err_t motor_init(Motor *m)
-{
+esp_err_t motor_init(Motor *m) {
     if (!m) {
         ESP_LOGE(TAG, "motor_init(); NULL sensor pointer");
         return ESP_ERR_INVALID_ARG;
@@ -102,8 +98,7 @@ esp_err_t motor_init(Motor *m)
 }
 
 
-esp_err_t servo_init(Servo *s)
-{
+esp_err_t servo_init(Servo *s) {
     if (!s) {
         ESP_LOGE(TAG, "servo_init(); NULL sensor pointer");
         return ESP_ERR_INVALID_ARG;
@@ -143,8 +138,7 @@ esp_err_t servo_init(Servo *s)
 }
 
 
-void motor_set_speed(Motor *m, float target_speed, bool debug)
-{
+void motor_set_speed(Motor *m, float target_speed, bool debug) {
     if(target_speed > 1.0f) target_speed = 1.0f;
     if(target_speed < -1.0f) target_speed = -1.0f;
 
@@ -167,16 +161,14 @@ void motor_set_speed(Motor *m, float target_speed, bool debug)
 }
 
 
-void motor_stop(Motor *m)
-{
+void motor_stop(Motor *m) {
     motor_apply_speed(m, 0.0f);
     m->current_speed = 0.0f;
     printf("Motor stopped safely.\n");
 }
 
 
-void servo_sets_angle(Servo *s, int angle_deg)
-{
+void servo_sets_angle(Servo *s, int angle_deg) {
     if(angle_deg > s->angle_range) angle_deg = s->angle_range;
     if(angle_deg < -s->angle_range) angle_deg = -s->angle_range;
 
@@ -191,8 +183,7 @@ void servo_sets_angle(Servo *s, int angle_deg)
 }
 
 
-void motors_enable(int PWRrelaiPin)
-{
+void motors_enable(int PWRrelaiPin) {
     // Set relay output pin
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PWRrelaiPin),
@@ -207,8 +198,7 @@ void motors_enable(int PWRrelaiPin)
 }
 
 
-void motors_disable(int PWRrelaiPin)
-{
+void motors_disable(int PWRrelaiPin) {
     gpio_set_level(PWRrelaiPin, 0);
     ESP_LOGI(TAG, "Motors disabled via relay on GPIO %d\n", PWRrelaiPin);
 }

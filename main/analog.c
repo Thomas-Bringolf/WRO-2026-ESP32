@@ -1,8 +1,10 @@
 #include "analog.h"
+
 #include "i2cdev.h"
-#include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
+
+#include <string.h>
 
 
 static const char *TAG = "ANALOG_MODULE";

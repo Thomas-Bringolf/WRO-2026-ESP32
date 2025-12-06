@@ -26,8 +26,8 @@
 #ifndef SPI_H
 #define SPI_H
 
-#include "driver/spi_slave.h"
 #include <stdint.h>
+#include "driver/spi_slave.h"
 
 
 /**
