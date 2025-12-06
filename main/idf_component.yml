@@ -1,0 +1,5 @@
+name: ESP32-WRO-2026-main
+version: "1.0.0"
+dependencies:
+  idf:
+    version: ">=5.5.1"

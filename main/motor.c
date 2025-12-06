@@ -2,8 +2,8 @@
 
 #include <stdio.h>
 
-#include "driver/gpio.h"       // For GPIO definitions, constants, pin numbers
-#include "soc/gpio_struct.h"   // For GPIO.func_out_sel_cfg
+#include "driver/gpio.h"
+#include "soc/gpio_struct.h"   
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
