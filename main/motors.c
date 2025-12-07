@@ -183,23 +183,33 @@ void servo_sets_angle(Servo *s, int angle_deg) {
 }
 
 
-void motors_enable(int PWRrelaiPin) {
+void relay_init(int relay_pin) {
     // Set relay output pin
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PWRrelaiPin),
+        .pin_bit_mask = (1ULL << relay_pin),
         .mode = GPIO_MODE_OUTPUT,
         .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE
     };
     gpio_config(&io_conf);
-    gpio_set_level(PWRrelaiPin, 1);
-    ESP_LOGI(TAG, "Motors enabled via relay on GPIO %d\n", PWRrelaiPin);
+    gpio_set_level(relay_pin, 0);
+    ESP_LOGI(TAG, "Relay initialized: GPIO %d\n", relay_pin);
+
 }
 
 
-void motors_disable(int PWRrelaiPin) {
-    gpio_set_level(PWRrelaiPin, 0);
-    ESP_LOGI(TAG, "Motors disabled via relay on GPIO %d\n", PWRrelaiPin);
+void relay_enable(int relay_pin) {
+    gpio_set_level(relay_pin, 1);
+    ESP_LOGW(TAG, "");
+    ESP_LOGW(TAG, "Motors ENABLED via relay on GPIO %d", relay_pin);
+    ESP_LOGW(TAG, "");
+
+}
+
+
+void relay_disable(int relay_pin) {
+    gpio_set_level(relay_pin, 0);
+    ESP_LOGI(TAG, "Motors disabled via relay on GPIO %d", relay_pin);
 }
 

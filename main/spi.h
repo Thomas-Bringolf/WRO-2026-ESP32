@@ -166,7 +166,7 @@ const char* MsgType_toString(const MsgType type);
  * @return Pointer to a newly allocated null-terminated string containing the
  *         message content, or NULL if the message is invalid or empty.
  */
-char* spi_message_toString(const SpiMessage *message);
+char* message_toString(const SpiMessage *message);
 
 /**
  * @brief Extract a 16-bit unsigned integer from a SpiMessage.
@@ -330,6 +330,33 @@ esp_err_t spi_decode_message(Spi *spi, SpiMessage *message);
  */
 esp_err_t spi_encode_message(Spi *spi, SpiMessage *message);
 
+/**
+ * @brief Receives an SPI message.
+ *
+ * This function waits for a message from the SPI slave, decodes it,
+ * logs the received message, and reports any decoding errors.
+ *
+ * @param[in] spi Pointer to the SPI interface structure.
+ * @param[out] message Pointer to the message structure to store the received message.
+ *
+ * @return
+ * - ESP_OK on successful reception and decoding.
+ * - ESP_FAIL if decoding fails.
+ */
+esp_err_t spi_recive_message(Spi *spi, SpiMessage *message);
 
+/**
+ * @brief Sends an SPI message.
+ *
+ * This function logs the message, encodes it for SPI transmission,
+ * sends it to the SPI slave, and then clears the message content.
+ *
+ * @param[in] spi Pointer to the SPI interface structure.
+ * @param[in,out] message Pointer to the message structure to send.
+ *
+ * @return
+ * - ESP_OK on success.
+ */
+esp_err_t spi_send_message(Spi *spi, SpiMessage *message);
 
 #endif // SPI_H

@@ -1,25 +1,25 @@
-#include "motors.h"
-#include "spi.h"
 #include "analog.h"
 #include "encoder.h"
+#include "motors.h"
+#include "spi.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "driver/spi_slave.h"
 #include "driver/pulse_cnt.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 #include "esp_timer.h"
 #include "esp_err.h"
 #include "esp_log.h"
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 //Relay
-#define PWR_RELAI 4
+#define PWR_RELAY 4
 
 // Motor
 #define MOTOR_PWM 5
@@ -49,7 +49,10 @@
 
 #define TAG "MAIN_MODULE"
 
+
 void app_main(void) {
+
+    relay_init(PWR_RELAY);
 
     Motor motor = {
         .pwm_pin = MOTOR_PWM,
@@ -75,19 +78,6 @@ void app_main(void) {
     };
     encoder_init(&encoder);
 
-    AnalogSensor adc = {
-        .i2c_addr = I2C_ADDR,
-        .i2c_port = I2C_PORT_NUM,
-        .sda_pin = I2C_SDA,
-        .scl_pin = I2C_SCL,
-        .gain = ADS111X_GAIN_4V096,
-        .conversion_factor[0] = 1.0f,
-        .conversion_factor[1] = 1.0f,
-        .conversion_factor[2] = 1.0f,
-        .conversion_factor[3] = 1.0f
-    };
-    analog_init(&adc);
-
     Spi spi = {
         .bufsize = 256,
         .host = SPI_RCV_HOST,
@@ -108,6 +98,40 @@ void app_main(void) {
         .req_pin = SPI_REQ
     };
     spi_slave_init(&spi);
+
+    AnalogSensor adc = {
+        .i2c_addr = I2C_ADDR,
+        .i2c_port = I2C_PORT_NUM,
+        .sda_pin = I2C_SDA,
+        .scl_pin = I2C_SCL,
+        .gain = ADS111X_GAIN_4V096,
+        .conversion_factor[0] = 1.0f,
+        .conversion_factor[1] = 1.0f,
+        .conversion_factor[2] = 1.0f,
+        .conversion_factor[3] = 1.0f
+    };
+    analog_init(&adc);
+
+    SpiMessage rcv_message = {0};
+    SpiMessage send_message = {0};
+
+    while (true) {
+        spi_recive_message(&spi, &rcv_message);
+        if (rcv_message.reg == 0x01) {
+            if (rcv_message.type != MSG_SET_REG_U16) {
+                ESP_LOGE(TAG, "Message Type not supported by Register 0x01");
+                send_message.type = MSG_SLAVE_ERR;
+                message_setString(&send_message, "Message Type not supported by Register 0x01");
+            } else if (message_toUint16(&rcv_message) == 0) {
+                relay_disable(PWR_RELAY);
+                send_message.type = MSG_SLAVE_ACK;
+            } else if (message_toUint16(&rcv_message) == 1) {
+                relay_enable(PWR_RELAY);
+                send_message.type = MSG_SLAVE_ACK;
+            }
+            spi_send_message(&spi, &send_message);
+        } 
+    }
 }
 
 
@@ -123,23 +147,7 @@ void app_main(void) {
     }
 */
 
-/**
-    SpiMessage message = {0};
-    while (true) {
-        spi_slave_rx(&spi);
-        if(spi_decode_message(&spi, &message) == ESP_OK) {
-            message_log(&message);
-            
-            // send test message
-            message_setString(&message, "Hey tu :)");
-            message.type = MSG_REP_ASCII;
-            message_log(&message);
-            spi_encode_message(&spi, &message);
-            spi_slave_tx(&spi);
-        
-        }    
-    }
-*/
+
 
 /**    
     bool keepOnGoing = true;

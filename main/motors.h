@@ -95,13 +95,22 @@ void motor_stop(Motor *m);
 void servo_sets_angle(Servo *s, int angle_deg);
 
 /**
+ * @brief Initializes the relay pin.
+ *
+ * Configuration of the specified GPIO pin to later power the motors.
+ *
+ * @param PWRrelaiPin GPIO pin controlling the relay.
+ */
+void relay_init(int relay_pin);
+
+/**
  * @brief Enable all motors via a relay pin.
  *
  * Sets the specified GPIO pin high to power the motors.
  *
  * @param PWRrelaiPin GPIO pin controlling the relay.
  */
-void motors_enable(int PWRrelaiPin);
+void relay_enable(int relay_pin);
 
 /**
  * @brief Disable all motors via a relay pin.
@@ -110,6 +119,6 @@ void motors_enable(int PWRrelaiPin);
  *
  * @param PWRrelaiPin GPIO pin controlling the relay.
  */
-void motors_disable(int PWRrelaiPin);
+void relay_disable(int relay_pin);
 
 #endif // MOTORS_H
