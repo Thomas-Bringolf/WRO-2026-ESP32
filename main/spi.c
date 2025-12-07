@@ -123,7 +123,10 @@ esp_err_t message_setString(SpiMessage *message, const char *str) {
 
     message->length = strlen(str);
 
+    // If the message is an empty sting, we just allocate one byte.
     if (message->length == 0) {
+        message->content = malloc(1);
+        memset(message->content, 0, 1);
         return ESP_OK;
     }
 
@@ -242,7 +245,6 @@ esp_err_t message_log(const SpiMessage *message) {
         case MSG_SET_REG_ASCII:
         case MSG_REP_ASCII:
             ESP_LOGI(TAG, "      \033[35mcontent (ASCII)\033[0m = \033[91m\"%.*s\"\033[0m",
-                     dir_color,
                      message->length,
                      message->content);
             break;
@@ -588,8 +590,20 @@ esp_err_t spi_send_message(Spi *spi, SpiMessage *message) {
     if (spi_encode_message(spi, message)) {
         return ESP_FAIL;
     }
-    
+
     spi_slave_tx(spi);
     message_setString(message, "");
     return ESP_OK;
+}
+
+
+void send_error(Spi *spi, const char *tag, const char *error_text) {
+    SpiMessage message = {
+        .type = MSG_SLAVE_ERR
+    };
+
+    message_setString(&message, error_text);
+    spi_send_message(spi, &message);
+    ESP_LOGE(tag, "%s", error_text);
+
 }
