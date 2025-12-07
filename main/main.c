@@ -122,14 +122,22 @@ void app_main(void) {
                 ESP_LOGE(TAG, "Message Type not supported by Register 0x01");
                 send_message.type = MSG_SLAVE_ERR;
                 message_setString(&send_message, "Message Type not supported by Register 0x01");
+                spi_send_message(&spi, &send_message);
             } else if (message_toUint16(&rcv_message) == 0) {
                 relay_disable(PWR_RELAY);
                 send_message.type = MSG_SLAVE_ACK;
+                spi_send_message(&spi, &send_message);
             } else if (message_toUint16(&rcv_message) == 1) {
                 relay_enable(PWR_RELAY);
                 send_message.type = MSG_SLAVE_ACK;
+                spi_send_message(&spi, &send_message);
+            } else {
+                ESP_LOGE(TAG, "Value not supported by Register 0x01");
+                message_setString(&send_message, "Value not supported by Register 0x01");
+                send_message.type = MSG_SLAVE_ERR;
+                spi_send_message(&spi, &send_message);
             }
-            spi_send_message(&spi, &send_message);
+            
         } 
     }
 }

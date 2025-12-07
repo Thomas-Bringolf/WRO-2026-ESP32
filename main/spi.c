@@ -121,15 +121,19 @@ esp_err_t message_setString(SpiMessage *message, const char *str) {
         message->content = NULL;
     }
 
-    size_t len = strlen(str);
-    message->content = malloc(len);
+    message->length = strlen(str);
+
+    if (message->length == 0) {
+        return ESP_OK;
+    }
+
+    message->content = malloc(message->length);
     if (!message->content) {
         ESP_LOGE(TAG, "message_setString(); ESP_ERR_NO_MEM, could not allocate memory");
         return ESP_ERR_NO_MEM;
     }
 
-    memcpy(message->content, str, len);
-    message->length = len;
+    memcpy(message->content, str, message->length);
 
     return ESP_OK;
 }
@@ -237,7 +241,7 @@ esp_err_t message_log(const SpiMessage *message) {
         case MSG_SLAVE_ERR:
         case MSG_SET_REG_ASCII:
         case MSG_REP_ASCII:
-            ESP_LOGI(TAG, "      \033[35m content (ASCII)\033[0m = \033[91m\"%.*s\"\033[0m",
+            ESP_LOGI(TAG, "      \033[35mcontent (ASCII)\033[0m = \033[91m\"%.*s\"\033[0m",
                      dir_color,
                      message->length,
                      message->content);
@@ -249,9 +253,9 @@ esp_err_t message_log(const SpiMessage *message) {
             if (message->length == 2) {
                 uint16_t value = ((uint16_t)message->content[0] << 8) |
                                  ((uint16_t)message->content[1]);
-                ESP_LOGI(TAG, "     \033[35mcontent (uint16)\033[0m = \033[91m%u\033[0m", value);
+                ESP_LOGI(TAG, "      \033[35mcontent (uint16)\033[0m = \033[91m%u\033[0m", value);
             } else {
-                ESP_LOGW(TAG, "     \033[0mcontent (uint16) INVALID LENGTH: %u", message->length);
+                ESP_LOGW(TAG, "      \033[0mcontent (uint16) INVALID LENGTH: %u", message->length);
             }
             break;
 
@@ -265,9 +269,9 @@ esp_err_t message_log(const SpiMessage *message) {
                                 ((uint32_t)message->content[3]);
                 float value;
                 memcpy(&value, &temp, sizeof(float));
-                ESP_LOGI(TAG, "     \033[35mcontent (float32)\033[0m = \033[91m%f\033[0m", value);
+                ESP_LOGI(TAG, "      \033[35mcontent (float32)\033[0m = \033[91m%f\033[0m", value);
             } else {
-                ESP_LOGW(TAG, "     content (float32) INVALID LENGTH: %u", message->length);
+                ESP_LOGW(TAG, "      content (float32) INVALID LENGTH: %u", message->length);
             }
             break;
 
@@ -276,11 +280,11 @@ esp_err_t message_log(const SpiMessage *message) {
         case MSG_SLAVE_ACK:
         case MSG_GET_REG:
         case MSG_PING:
-            ESP_LOGI(TAG, "     \033[35mcontent\033[0m = \033[1;37m<none>\033[0m");
+            ESP_LOGI(TAG, "      \033[35mcontent\033[0m = \033[1;37m<none>\033[0m");
             break;
 
         default:
-            ESP_LOGW(TAG, "     content = <unknown message type>");
+            ESP_LOGW(TAG, "      content = <unknown message type>");
             break;
     }
     ESP_LOGI(TAG, "");
@@ -580,7 +584,11 @@ esp_err_t spi_recive_message(Spi *spi, SpiMessage *message) {
 
 esp_err_t spi_send_message(Spi *spi, SpiMessage *message) {
     message_log(message);
-    spi_encode_message(spi, message);
+
+    if (spi_encode_message(spi, message)) {
+        return ESP_FAIL;
+    }
+    
     spi_slave_tx(spi);
     message_setString(message, "");
     return ESP_OK;
