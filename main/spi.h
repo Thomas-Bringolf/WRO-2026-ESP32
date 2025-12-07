@@ -359,5 +359,6 @@ esp_err_t spi_recive_message(Spi *spi, SpiMessage *message);
  */
 esp_err_t spi_send_message(Spi *spi, SpiMessage *message);
 
-void send_error(Spi *spi, const char *tag, const char *error_text)
+void send_error(Spi *spi, const char *tag, const char *error_text);
+
 #endif // SPI_H
