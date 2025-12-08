@@ -3,7 +3,7 @@
 #include "i2cdev.h"
 #include "esp_log.h"
 #include "esp_err.h"
-
+#include "driver/i2c.h"
 #include <string.h>
 
 
@@ -21,6 +21,21 @@ esp_err_t analog_init(AnalogSensor *sensor)
     sensor->gain_val = ads111x_gain_values[sensor->gain];  // make sure ads101x_gain_values exists for 1015
 
     esp_err_t err;
+
+    ////////////////////
+    /// Remove befor flight!! Pull-up meeds to be external ~5k Ohm
+    ///////////////////
+    /// Configure GPIO (pull-ups)
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << sensor->scl_pin) |
+                        (1ULL << sensor->scl_pin),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+
 
     // Initialize I2C library
     err = i2cdev_init();

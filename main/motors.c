@@ -34,7 +34,7 @@ static void motor_apply_speed(Motor *m, float speed) {
         duty_raw = (int)(duty_max * speed);
         gpio_set_level(m->dir_pin, 0);
     } else {
-        duty_raw = duty_max - (int)(duty_max * speed);
+        duty_raw = duty_max + (int)(duty_max * speed);
         gpio_set_level(m->dir_pin, 1);
     }
 
@@ -168,18 +168,18 @@ void motor_stop(Motor *m) {
 }
 
 
-void servo_sets_angle(Servo *s, int angle_deg) {
+void servo_sets_angle(Servo *s, float angle_deg) {
     if(angle_deg > s->angle_range) angle_deg = s->angle_range;
     if(angle_deg < -s->angle_range) angle_deg = -s->angle_range;
 
     // Map angle to duty cycle
     float duty_span = (s->max_duty - s->min_duty)/2;
-    float duty = (s->center_duty) + (angle_deg / s->angle_range) * duty_span;
+    float duty = (s->center_duty) + (angle_deg / (float)s->angle_range) * duty_span;
 
     ledc_set_duty(SERVO_LEDC_MODE, SERVO_PWM_CHANNEL, duty);
     ledc_update_duty(SERVO_LEDC_MODE, SERVO_PWM_CHANNEL);
 
-    printf("Servo angle set to %d degrees (duty: %f)\n", angle_deg, duty);
+    printf("Servo angle set to %f degrees (duty: %f)\n", angle_deg, duty);
 }
 
 
@@ -194,7 +194,7 @@ void relay_init(int relay_pin) {
     };
     gpio_config(&io_conf);
     gpio_set_level(relay_pin, 0);
-    ESP_LOGI(TAG, "Relay initialized: GPIO %d\n", relay_pin);
+    ESP_LOGI(TAG, "Relay initialized: GPIO %d", relay_pin);
 
 }
 

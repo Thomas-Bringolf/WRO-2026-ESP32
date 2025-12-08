@@ -31,6 +31,20 @@ esp_err_t encoder_init(Encoder *encoder)
 
     esp_err_t err;
 
+    ////////////////////
+    /// Remove befor flight!! Pull-up meeds to be external ~5k Ohm
+    ///////////////////
+    /// Configure GPIO (pull-ups)
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << encoder->channelA_pin) |
+                        (1ULL << encoder->channelB_pin),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&io_conf);
+
     // Create PCNT unit
     pcnt_unit_config_t unit_config = {
         .low_limit     = -1000,
@@ -82,7 +96,7 @@ esp_err_t encoder_init(Encoder *encoder)
     pcnt_unit_start(encoder->pcnt_unit);
 
     // Initialize tracking variables
-    encoder->accumulated_count      = 0;
+    encoder_accumulated_count = 0;
     encoder->last_accumulated_count = 0;
     encoder->last_speed_calc_time   = esp_timer_get_time();
 
@@ -98,7 +112,6 @@ esp_err_t encoder_reset(Encoder *encoder)
     pcnt_unit_stop(encoder->pcnt_unit);
     encoder_accumulated_count = 0;
     pcnt_unit_clear_count(encoder->pcnt_unit);
-    encoder->accumulated_count      = 0;
     encoder->last_accumulated_count = 0;
     encoder->last_speed_calc_time   = esp_timer_get_time();
     pcnt_unit_start(encoder->pcnt_unit);
@@ -113,9 +126,8 @@ int32_t encoder_read(Encoder *encoder)
 
     int count = 0;
     pcnt_unit_get_count(encoder->pcnt_unit, &count);
-    pcnt_unit_clear_count(encoder->pcnt_unit);
     encoder_accumulated_count += count;
-
+    pcnt_unit_clear_count(encoder->pcnt_unit);
     return encoder_accumulated_count;
 }
 

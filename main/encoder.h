@@ -30,7 +30,6 @@ typedef struct {
     int channelB_pin;                 /**< GPIO pin connected to encoder phase B */
     pcnt_unit_handle_t pcnt_unit;        /**< Pulse counter unit handle */
     pcnt_channel_handle_t pcnt_channel;  /**< Pulse counter channel handle */
-    int32_t accumulated_count;        /**< Absolute accumulated count */
     int32_t last_accumulated_count;   /**< Count at last speed calculation */
     int64_t last_speed_calc_time;     /**< Timestamp of last speed calculation (µs) */
 } Encoder;

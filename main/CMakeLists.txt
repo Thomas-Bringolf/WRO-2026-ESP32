@@ -5,6 +5,7 @@ idf_component_register(
         "spi.c"
         "analog.c"
         "encoder.c"
+        "i2c_scann.c"
     INCLUDE_DIRS
         "."
 )

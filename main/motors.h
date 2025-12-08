@@ -92,7 +92,7 @@ void motor_stop(Motor *m);
  * @param s Pointer to the Servo struct.
  * @param angle_deg Target angle in degrees.
  */
-void servo_sets_angle(Servo *s, int angle_deg);
+void servo_sets_angle(Servo *s, float angle_deg);
 
 /**
  * @brief Initializes the relay pin.

@@ -52,6 +52,7 @@ const char* MsgType_toString(MsgType type) {
         case MSG_SLAVE_ERR:         return "MSG_SLAVE_ERR";
         case MSG_REP_ASCII:         return "MSG_REP_ASCII";
         case MSG_REP_U16:           return "MSG_REP_U16";
+        case MSG_REP_I32:           return "MSG_REP_I32";
         case MSG_REP_F32:           return "MSG_REP_F32";
 
         default:                    return "UNKNOWN_MSG_TYPE";
@@ -85,8 +86,25 @@ uint16_t message_toUint16(const SpiMessage *message) {
     }
 
     // Big-endian content copy
-    uint16_t value = ((uint16_t)message->content[0] << 8) |
-                     ((uint16_t)message->content[1]);
+    uint16_t value = (message->content[0] << 8) |
+                     (message->content[1]);
+
+    return value;
+}
+
+
+int32_t message_toInt32(const SpiMessage *message) {
+    // Check if message is valid
+    if (!message || !message->content || message->length != 4) {
+        ESP_LOGE(TAG, "message_toInt32(); Error when extracting int32 from message");
+        return 0;
+    }
+
+    // Big-endian content copy
+    int32_t value = (message->content[0] << 24) |
+                    (message->content[1] << 16) |
+                    (message->content[2] << 8) |
+                    (message->content[3]);
 
     return value;
 }
@@ -165,6 +183,36 @@ esp_err_t message_setUint16(SpiMessage *message, uint16_t value) {
     message->content[1] = value & 0xFF;
 
     message->length = 2;
+
+    return ESP_OK;
+}
+
+
+esp_err_t message_setInt32(SpiMessage *message, int32_t value) {
+    if (!message) {
+        ESP_LOGE(TAG, "message_setInt32(); ESP_ERR_INVALID_ARG, null message pointer");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Free existing content
+    if (message->content) {
+        free(message->content);
+        message->content = NULL;
+    }
+
+    message->content = malloc(4);
+    if (!message->content) {
+        ESP_LOGE(TAG, "message_setInt32(); ESP_ERR_NO_MEM, could not allocate memory");
+        return ESP_ERR_NO_MEM;
+    }
+
+    // Big-endian encoding
+    message->content[0] = (value >> 24) & 0xFF;
+    message->content[1] = (value >> 16) & 0xFF;
+    message->content[2] = (value >> 8) & 0xFF;
+    message->content[3] = value & 0xFF;
+
+    message->length = 4;
 
     return ESP_OK;
 }
@@ -253,11 +301,21 @@ esp_err_t message_log(const SpiMessage *message) {
         case MSG_SET_REG_U16:
         case MSG_REP_U16:
             if (message->length == 2) {
-                uint16_t value = ((uint16_t)message->content[0] << 8) |
-                                 ((uint16_t)message->content[1]);
+                uint16_t value = message_toUint16(message);
                 ESP_LOGI(TAG, "      \033[35mcontent (uint16)\033[0m = \033[91m%u\033[0m", value);
             } else {
                 ESP_LOGW(TAG, "      \033[0mcontent (uint16) INVALID LENGTH: %u", message->length);
+            }
+            break;
+
+        // uint16 messages
+        case MSG_SET_REG_I32:
+        case MSG_REP_I32:
+            if (message->length == 4) {
+                int32_t value = message_toInt32(message);
+                ESP_LOGI(TAG, "      \033[35mcontent (int32)\033[0m = \033[91m%d\033[0m", value);
+            } else {
+                ESP_LOGW(TAG, "      \033[0mcontent (int32) INVALID LENGTH: %u", message->length);
             }
             break;
 
@@ -366,16 +424,22 @@ esp_err_t spi_slave_tx(Spi *spi) {
     memset(spi->recvbuf, 0, spi->bufsize);
 
     // Queue transaction
-    return_code = spi_slave_queue_trans(spi->host, &(spi->transaction), portMAX_DELAY);
-    if (return_code != ESP_OK) {
+    return_code = spi_slave_queue_trans(spi->host, &(spi->transaction), pdMS_TO_TICKS(TX_TIMEOUT_MS));
+    if (return_code == ESP_ERR_TIMEOUT) {
+        ESP_LOGE(TAG, "Failed add  SPI transaction to queue, TIMEOUT of %dms reached", TX_TIMEOUT_MS);
+        return return_code;
+    } else if (return_code != ESP_OK) {
         ESP_LOGE(TAG, "spi_slave_tx(); Failed to queue SPI transaction: %s", esp_err_to_name(return_code));
         return return_code;
     }
 
     // REQ to master + Wait for transaction result
     gpio_set_level(spi->req_pin, true);
-    return_code = spi_slave_get_trans_result(spi->host, &(spi->transaction_result), portMAX_DELAY);
-    if (return_code != ESP_OK) {
+    return_code = spi_slave_get_trans_result(spi->host, &(spi->transaction_result), pdMS_TO_TICKS(TX_TIMEOUT_MS));
+    if (return_code == ESP_ERR_TIMEOUT) {
+        ESP_LOGE(TAG, "Failed transmit SPI transaction to master, TIMEOUT of %dms reached", TX_TIMEOUT_MS);
+        return return_code;
+    } else if (return_code != ESP_OK) {
         ESP_LOGE(TAG, "spi_slave_tx(); Failed to get SPI transaction result: %s", esp_err_to_name(return_code));
         return return_code;
     }
@@ -490,17 +554,10 @@ esp_err_t spi_encode_message(Spi *spi, SpiMessage *message) {
 
         //--- Slave to Master ---
         case MSG_SLAVE_ACK:
-            break;
-
         case MSG_SLAVE_ERR:
-            break;
-
         case MSG_REP_ASCII:
-            break;
-
         case MSG_REP_U16:
-            break;
-
+        case MSG_REP_I32:
         case MSG_REP_F32:
             break;
 
@@ -573,7 +630,7 @@ esp_err_t spi_encode_message(Spi *spi, SpiMessage *message) {
 }
 
 
-esp_err_t spi_recive_message(Spi *spi, SpiMessage *message) {
+esp_err_t spi_receive_message(Spi *spi, SpiMessage *message) {
     spi_slave_rx(spi);
     if (spi_decode_message(spi, message) != ESP_OK) {
         ESP_LOGW(TAG, "Somthing went wrong while decoding message");

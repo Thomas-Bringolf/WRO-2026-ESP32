@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include "driver/spi_slave.h"
 
+#define TX_TIMEOUT_MS 100
 
 /**
  * @struct Spi
@@ -80,16 +81,18 @@ typedef enum {
     MSG_MASTER_ERR        = 0x02, /**< Master error message (ASCII) */
     MSG_SET_REG_ASCII     = 0x03, /**< Write ASCII data to a register */
     MSG_SET_REG_U16       = 0x04, /**< Write uint16 data to a register */
-    MSG_SET_REG_F32       = 0x05, /**< Write float32 data to a register */
-    MSG_GET_REG           = 0x06, /**< Request register value */
-    MSG_PING              = 0x07, /**< Liveness check ("ping") */
+    MSG_SET_REG_I32       = 0x05, /**< Write int32 data to a register */
+    MSG_SET_REG_F32       = 0x06, /**< Write float32 data to a register */
+    MSG_GET_REG           = 0x07, /**< Request register value */
+    MSG_PING              = 0x08, /**< Liveness check ("ping") */
 
     /* --- Slave → Master --- */
     MSG_SLAVE_ACK         = 0x11, /**< Slave acknowledge */
     MSG_SLAVE_ERR         = 0x12, /**< Slave error message (ASCII) */
     MSG_REP_ASCII         = 0x13, /**< ASCII register reply */
     MSG_REP_U16           = 0x14, /**< uint16 register reply */
-    MSG_REP_F32           = 0x15  /**< float32 register reply */
+    MSG_REP_I32           = 0x15,  /**< int32 register reply */
+    MSG_REP_F32           = 0x16  /**< float32 register reply */
 } MsgType;
 
 /**
@@ -185,6 +188,22 @@ char* message_toString(const SpiMessage *message);
 uint16_t message_toUint16(const SpiMessage *message);
 
 /**
+ * @brief Extract a 32-bit signed integer from a SpiMessage.
+ *
+ * This function interprets the first two bytes of the message content
+ * as a big-endian unsigned 16-bit integer. It checks that the message
+ * is valid and that the length is exactly 4 bytes.
+ *
+ * @param message  Pointer to the SpiMessage to extract from.
+ *
+ * @return The decoded int32_t value. Returns 0 if the message is invalid.
+ *
+ * @note This function assumes the message content is encoded in big-endian
+ *       (MSB first) order. Use caution if your protocol uses a different endianness.
+ */
+int32_t message_toInt32(const SpiMessage *message);
+
+/**
  * @brief Extract a 32-bit floating point value from a SpiMessage.
  *
  * This function interprets the first four bytes of the message content
@@ -228,6 +247,23 @@ esp_err_t message_setString(SpiMessage *message, const char *str);
  * - ESP_ERR_NO_MEM if memory allocation fails
  */
 esp_err_t message_setUint16(SpiMessage *message, uint16_t value);
+
+/**
+ * @brief Set the content of a SpiMessage from a 32-bit signed integer.
+ *
+ * The integer is encoded in **big-endian** (MSB first) format into
+ * a newly allocated 4-byte buffer. Any previously allocated content
+ * in the message will be freed. The message length is set to 4.
+ *
+ * @param message Pointer to the SpiMessage to modify.
+ * @param value 16-bit unsigned integer to set as message content.
+ *
+ * @return
+ * - ESP_OK on success
+ * - ESP_ERR_INVALID_ARG if message is NULL
+ * - ESP_ERR_NO_MEM if memory allocation fails
+ */
+esp_err_t message_setInt32(SpiMessage *message, int32_t value);
 
 /**
  * @brief Set the content of a SpiMessage from a 32-bit floating point value.
@@ -343,7 +379,7 @@ esp_err_t spi_encode_message(Spi *spi, SpiMessage *message);
  * - ESP_OK on successful reception and decoding.
  * - ESP_FAIL if decoding fails.
  */
-esp_err_t spi_recive_message(Spi *spi, SpiMessage *message);
+esp_err_t spi_receive_message(Spi *spi, SpiMessage *message);
 
 /**
  * @brief Sends an SPI message.
