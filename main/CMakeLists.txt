@@ -1,12 +1,12 @@
 idf_component_register(
     SRCS
         "main.c"
-        "motors.c"
-        "spi.c"
-        "analog.c"
-        "encoder.c"
-        "i2c_scann.c"
-        "dispatch.c"
+        "src/motors.c"
+        "src/spi.c"
+        "src/analog.c"
+        "src/encoder.c"
+        "src/i2c_scann.c"
+        "src/dispatch.c"
     INCLUDE_DIRS
-        "."
+        "include"
 )

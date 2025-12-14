@@ -5,7 +5,7 @@
 
 
 #define DEBUG_MODE true
-#define TAG "MESSAGE_MODULE"
+#define TAG "DISPATCH_MODULE"
 
 
 esp_err_t dispatch_message(Spi *spi, const SpiMessage *rcv_msg, const message_handler_t *handlers, size_t handler_count) {
