@@ -10,7 +10,11 @@
 #include <unistd.h>
 #include <string.h>
 
+#define DEBUG_MODE false
 #define TAG "SPI_MODULE"
+
+#define SPI_FRAME_OVERHEAD 9
+
 
 
 bool is_buf_empty(char *buf, size_t size) {
@@ -31,7 +35,7 @@ void log_first_bytes_hex(char *buf, int len) {
     }
     line[len * 3] = '\0'; // null-terminate
 
-    ESP_LOGI(TAG, "First %d bytes: %s", (int)len, line);
+    if (DEBUG_MODE) ESP_LOGI(TAG, "First %d bytes: %s", (int)len, line);
 }
 
 
@@ -127,112 +131,129 @@ float message_toFloat32(const SpiMessage *message) {
 }
 
 
-esp_err_t message_setString(SpiMessage *message, const char *str) {
-    if (!message || !str) {
-        ESP_LOGE(TAG, "message_setString(); ESP_ERR_INVALID_ARG, no message or String given");
+esp_err_t message_sendString(Spi *spi, uint16_t reg, const char *fmt, ...) {
+    if (!spi || !fmt) {
+        ESP_LOGE(TAG, "message_sendString(); ESP_ERR_INVALID_ARG, no spi object or String given");
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Free existing content
-    if (message->content) {
-        free(message->content);
-        message->content = NULL;
+    // Allocate max possible amount of memory for the current sendbuf size plus one byte for null-char
+    char buffer[spi->bufsize - SPI_FRAME_OVERHEAD + 1];
+
+    // Some black-magic to build the string
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    if (len < 0) {
+        // encoding or format error
+        ESP_LOGE(TAG, "message_sendString(); string encoding error");
+        return ESP_FAIL;
+    } else if ((size_t)len >= sizeof(buffer)) {
+        // output was truncated
+        ESP_LOGW(TAG, "message_sendString(); message was truncated while encoding. Original size: %d | Truncated size: %d", len, sizeof(buffer));
     }
 
-    message->length = strlen(str);
+    SpiMessage message = {
+        .type = MSG_REP_ASCII,
+        .reg = reg,
+        .length =strlen(buffer) // Calculate message size. Stop at the first null-char
+    };
 
     // If the message is an empty sting, we just allocate one byte.
-    if (message->length == 0) {
-        message->content = malloc(1);
-        memset(message->content, 0, 1);
-        return ESP_OK;
+    if (message.length == 0) {
+        message.content = NULL;
+    } else {
+        message.content = malloc(message.length);
+        if (!message.content) {
+            ESP_LOGE(TAG, "message_sendString(); ESP_ERR_NO_MEM, could not allocate memory");
+            return ESP_ERR_NO_MEM;
+        }
+        memcpy(message.content, buffer, message.length);
     }
 
-    message->content = malloc(message->length);
-    if (!message->content) {
-        ESP_LOGE(TAG, "message_setString(); ESP_ERR_NO_MEM, could not allocate memory");
-        return ESP_ERR_NO_MEM;
-    }
-
-    memcpy(message->content, str, message->length);
-
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
     return ESP_OK;
 }
 
 
-esp_err_t message_setUint16(SpiMessage *message, uint16_t value) {
-    if (!message) {
-        ESP_LOGE(TAG, "message_setUint16(); ESP_ERR_INVALID_ARG, null message pointer");
+esp_err_t message_sendUint16(Spi *spi, uint16_t reg, uint16_t value) {
+    if (!spi) {
+        ESP_LOGE(TAG, "message_sendUint16(); ESP_ERR_INVALID_ARG, null spi pointer");
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Free existing content
-    if (message->content) {
-        free(message->content);
-        message->content = NULL;
-    }
+    SpiMessage message = {
+        .type = MSG_REP_U16,
+        .reg = reg,
+        .length = 2
+    };
 
-    message->content = malloc(2);
-    if (!message->content) {
-        ESP_LOGE(TAG, "message_setUint16(); ESP_ERR_NO_MEM, could not allocate memory");
-        return ESP_ERR_NO_MEM;
-    }
-
-    // Big-endian encoding
-    message->content[0] = (value >> 8) & 0xFF;
-    message->content[1] = value & 0xFF;
-
-    message->length = 2;
-
-    return ESP_OK;
-}
-
-
-esp_err_t message_setInt32(SpiMessage *message, int32_t value) {
-    if (!message) {
-        ESP_LOGE(TAG, "message_setInt32(); ESP_ERR_INVALID_ARG, null message pointer");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // Free existing content
-    if (message->content) {
-        free(message->content);
-        message->content = NULL;
-    }
-
-    message->content = malloc(4);
-    if (!message->content) {
-        ESP_LOGE(TAG, "message_setInt32(); ESP_ERR_NO_MEM, could not allocate memory");
+    message.content = malloc(2);
+    if (!message.content) {
+        ESP_LOGE(TAG, "message_sendUint16(); ESP_ERR_NO_MEM, could not allocate memory");
         return ESP_ERR_NO_MEM;
     }
 
     // Big-endian encoding
-    message->content[0] = (value >> 24) & 0xFF;
-    message->content[1] = (value >> 16) & 0xFF;
-    message->content[2] = (value >> 8) & 0xFF;
-    message->content[3] = value & 0xFF;
+    message.content[0] = (value >> 8) & 0xFF;
+    message.content[1] = value & 0xFF;
 
-    message->length = 4;
-
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
     return ESP_OK;
 }
 
 
-esp_err_t message_setFloat32(SpiMessage *message, float value) {
-    if (!message) {
-        ESP_LOGE(TAG, "message_setFloat32(); ESP_ERR_INVALID_ARG, null message pointer");
+esp_err_t message_sendInt32(Spi *spi, uint16_t reg, int32_t value) {
+    if (!spi) {
+        ESP_LOGE(TAG, "message_sendInt32(); ESP_ERR_INVALID_ARG, null spi pointer");
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Free existing content
-    if (message->content) {
-        free(message->content);
-        message->content = NULL;
+    SpiMessage message = {
+        .type = MSG_REP_I32,
+        .reg = reg,
+        .length = 4
+    };
+
+    message.content = malloc(4);
+    if (!message.content) {
+        ESP_LOGE(TAG, "message_sendInt32(); ESP_ERR_NO_MEM, could not allocate memory");
+        return ESP_ERR_NO_MEM;
+    }
+    // Big-endian encoding
+    message.content[0] = (value >> 24) & 0xFF;
+    message.content[1] = (value >> 16) & 0xFF;
+    message.content[2] = (value >> 8) & 0xFF;
+    message.content[3] = value & 0xFF;
+
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
+    return ESP_OK;
+}
+
+
+esp_err_t message_sendFloat32(Spi *spi, uint16_t reg, float value) {
+    if (!spi) {
+        ESP_LOGE(TAG, "message_sendFloat32(); ESP_ERR_INVALID_ARG, null spi pointer");
+        return ESP_ERR_INVALID_ARG;
     }
 
-    message->content = malloc(4);
-    if (!message->content) {
-        ESP_LOGE(TAG, "message_setFloat32(); ESP_ERR_NO_MEM, could not allocate memory");
+    SpiMessage message = {
+        .type = MSG_REP_F32,
+        .reg = reg,
+        .length = 4
+    };
+
+    message.content = malloc(4);
+    if (!message.content) {
+        ESP_LOGE(TAG, "message_sendFloat32(); ESP_ERR_NO_MEM, could not allocate memory");
         return ESP_ERR_NO_MEM;
     }
 
@@ -241,13 +262,87 @@ esp_err_t message_setFloat32(SpiMessage *message, float value) {
     memcpy(&temp, &value, sizeof(float));
 
     // Big-endian encoding
-    message->content[0] = (temp >> 24) & 0xFF;
-    message->content[1] = (temp >> 16) & 0xFF;
-    message->content[2] = (temp >> 8) & 0xFF;
-    message->content[3] = temp & 0xFF;
+    message.content[0] = (temp >> 24) & 0xFF;
+    message.content[1] = (temp >> 16) & 0xFF;
+    message.content[2] = (temp >> 8) & 0xFF;
+    message.content[3] = temp & 0xFF;
 
-    message->length = 4;
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
+    return ESP_OK;
+}
 
+
+esp_err_t message_sendError(Spi *spi, const char *tag, const char *fmt, ...) {
+    if (!spi || !fmt) {
+        ESP_LOGE(TAG, "message_setString(); ESP_ERR_INVALID_ARG, no spi object or String given");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Allocate max possible amount of memory for the current sendbuf size plus one byte for null-char
+    char buffer[spi->bufsize - SPI_FRAME_OVERHEAD + 1];
+
+    // Some black-magic to build the string
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    if (len < 0) {
+        // encoding or format error
+        ESP_LOGE(TAG, "message_sendError(); string encoding error");
+    } else if ((size_t)len >= sizeof(buffer)) {
+        // output was truncated
+        ESP_LOGW(TAG, "message_sendError(); message was truncated while encoding. Original size: %d | Truncated size: %d", len, sizeof(buffer));
+    }
+
+    SpiMessage message = {
+        .type = MSG_SLAVE_ERR,
+        .reg = 0,
+        .length =strlen(buffer) // Calculate message size. Stop at the first null-char
+    };
+
+    // If the message is an empty sting, we just allocate one byte.
+    if (message.length == 0) {
+        message.content = malloc(1);
+        memset(message.content, 0, 1);
+    } else {
+        message.content = malloc(message.length);
+        if (!message.content) {
+            ESP_LOGE(TAG, "message_setString(); ESP_ERR_NO_MEM, could not allocate memory");
+            return ESP_ERR_NO_MEM;
+        }
+        memcpy(message.content, buffer, message.length);
+    }
+
+    // Log the error
+    ESP_LOGE(tag, "%s", buffer);
+    // Send the error via spi
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
+
+    return ESP_OK;
+}
+
+
+esp_err_t message_sendACK(Spi *spi) {
+    if (!spi) {
+        ESP_LOGE(TAG, "message_sendACK(); ESP_ERR_INVALID_ARG, null spi pointer");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    SpiMessage message = {
+        .type = MSG_SLAVE_ACK,
+        .reg = 0,
+        .length = 0
+    };
+
+    message.content = NULL;
+    if (DEBUG_MODE) message_log(&message);
+    spi_encode_message(spi, &message);
+    spi_slave_tx(spi);
     return ESP_OK;
 }
 
@@ -263,14 +358,14 @@ esp_err_t message_log(const SpiMessage *message) {
     const char *dir_str;
     const char *dir_color;
 
-    if (message->type >= 0x01 && message->type <= 0x07) {
+    if (message->type >= 0x01 && message->type <= 0x010) {
         dir_str = "\033[46m [MASTER ⇒ SLAVE]";
         dir_color = "     ";  // Magenta (send)
-    } else if (message->type >= 0x11 && message->type <= 0x15) {
+    } else if (message->type >= 0x11 && message->type <= 0x20) {
         dir_str = "\033[42m [SLAVE ⇒ MASTER]";
         dir_color = "     ";  // Green (receive)
     } else {
-        dir_str = "\033[95 [UNKNOWN]";
+        dir_str = "\033[95m [UNKNOWN]";
         dir_color = "     ";  // magenta
     }
 
@@ -400,9 +495,11 @@ esp_err_t spi_slave_init(Spi *spi) {
 
 
 esp_err_t spi_slave_rx(Spi *spi) {
-    memset(spi->recvbuf, 0, spi->bufsize);
-    
+    // clear recive buffer (Unsessesary since normaly overwritten in a synchonous recive operation)
+    //memset(spi->recvbuf, 0, spi->bufsize);
+
     // Queue transaction
+    gpio_set_level(spi->req_pin, false);
     esp_err_t return_code = spi_slave_transmit(spi->host, &(spi->transaction), portMAX_DELAY);
     if (return_code != ESP_OK) {
         ESP_LOGE(TAG, "spi_slave_rx(); Failed to queue SPI transaction: %s", esp_err_to_name(return_code));
@@ -411,7 +508,7 @@ esp_err_t spi_slave_rx(Spi *spi) {
 
     //Clear send buffer after transaction
     memset(spi->sendbuf, 0, spi->bufsize);
-    ESP_LOGV(TAG, "spi_slave_rx(); SPI transmit successful");
+    if (DEBUG_MODE) ESP_LOGI(TAG, "spi_slave_rx(); SPI read transaction successful");
     return ESP_OK;
 }
 
@@ -443,11 +540,10 @@ esp_err_t spi_slave_tx(Spi *spi) {
         ESP_LOGE(TAG, "spi_slave_tx(); Failed to get SPI transaction result: %s", esp_err_to_name(return_code));
         return return_code;
     }
-    gpio_set_level(spi->req_pin, false);
-    
+    if (DEBUG_MODE) ESP_LOGI(TAG, "spi_slave_tx(); SPI send transaction successful");
+
     //Clear send buffer after transaction
     memset(spi->sendbuf, 0, spi->bufsize);
-    ESP_LOGV(TAG, "spi_slave_tx(); SPI transmit successful");
     if (!is_buf_empty(spi->recvbuf, spi->bufsize)) {
         ESP_LOGE(TAG, "spi_slave_tx(); ESP_ERR_INVALID_RESPONSE, recived message while tansmitting");
         return ESP_ERR_INVALID_RESPONSE;
@@ -488,7 +584,7 @@ esp_err_t spi_decode_message(Spi *spi, SpiMessage *message) {
 
     // Allocate content buffer
     message->content = (char *)malloc(message->length); // +1 for null terminator
-    if (!message->content) {
+    if (!message->content && message->length != 0) {
         ESP_LOGE(TAG, "spi_decode_message(); ESP_ERR_NO_MEM, could not allocate content buffer");
         return ESP_ERR_NO_MEM;
     }
@@ -517,40 +613,28 @@ esp_err_t spi_decode_message(Spi *spi, SpiMessage *message) {
 
 
 esp_err_t spi_encode_message(Spi *spi, SpiMessage *message) {
-    if (spi->bufsize < 9) {
+    esp_err_t err = ESP_OK;
+
+    // Check if spi send buffer will be lare enough at all
+    if (spi->bufsize < SPI_FRAME_OVERHEAD) {
         ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_INVALID_SIZE, SPI buffer size too small to contain a valid message");
-        return ESP_ERR_INVALID_SIZE;
+        err = ESP_ERR_INVALID_SIZE;
+        goto cleanup;
     }
-    
+
+    // Check if message type is legale
     switch (message->type) {
         //--- Master to Slave --- (All illegale)
         case MSG_MASTER_ACK:
-            message->length = -1;
-            break;
-
         case MSG_MASTER_ERR:
-            message->length = -1;
-            break;
-
         case MSG_SET_REG_ASCII:
-            message->length = -1;
-            break;
-
         case MSG_SET_REG_U16:
-            message->length = -1;
-            break;
-
         case MSG_SET_REG_F32:
-            message->length = -1;
-            break;
-
         case MSG_PING:
-            message->length = -1;
-            break;
-
         case MSG_GET_REG:
-            message->length = -1;
-            break;
+            ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_NOT_ALLOWED, SPI message of type %02X illegale", message->type);
+            err = ESP_ERR_NOT_ALLOWED;
+            goto cleanup;
 
         //--- Slave to Master ---
         case MSG_SLAVE_ACK:
@@ -562,44 +646,34 @@ esp_err_t spi_encode_message(Spi *spi, SpiMessage *message) {
             break;
 
         default:
-            message->length = -2;
-            break;
+            ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_NOT_ALLOWED, SPI message of type %02X does not exist", message->type);
+            err = ESP_ERR_NOT_ALLOWED;
+            goto cleanup;
     }
 
-    if (message->length == -1) {
-        ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_NOT_ALLOWED, SPI message of type %02X illegal", message->type);
-        return ESP_ERR_NOT_ALLOWED;
-    } else if (message->length == -2) {
-        ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_NOT_ALLOWED, SPI message of type %02X does not exist", message->type);
-        return ESP_ERR_NOT_ALLOWED;
-    }
-
-    if (message->length > spi->bufsize - 9) {
+    // Check buffer size again now that we know the size of the message content
+    if (message->length > spi->bufsize - SPI_FRAME_OVERHEAD) {
         ESP_LOGE(TAG, "spi_encode_message(); ESP_ERR_INVALID_SIZE, SPI buffer size too small to contain the message of lenth %d", message->length);
-        return ESP_ERR_INVALID_SIZE;
+        err = ESP_ERR_INVALID_SIZE;
+        goto cleanup;
     }
-    
-    // Clear sendbuf
-    memset(spi->sendbuf, 0, spi->bufsize);
 
-    // Add start byte
+    // [1-9] Build sendbuff
+    // 1. Clear sendbuf
+    memset(spi->sendbuf, 0, spi->bufsize);
+    // 2. Add start byte
     spi->sendbuf[0] = 0x55;
-    
-    // Copy MsgType
+    // 3. Copy MsgType
     spi->sendbuf[1] = message->type;
-    
-    // Copy register number (uint16, big-endian)
+    // 4. Copy register number (uint16, big-endian)
     spi->sendbuf[2] = (message->reg >> 8) & 0x00FF;     // high byte
     spi->sendbuf[3] = message->reg & 0x00FF;            // low byte
-    
-    // Copy message length (uint16, big-endian)
+    // 5. Copy message length (uint16, big-endian)
     spi->sendbuf[4] = (message->length >> 8) & 0x00FF;  // high byte
     spi->sendbuf[5] = message->length & 0x00FF;         // low byte
-
-    // Copy message content (here the null char at the end will not be copied!)
+    // 6. Copy message content (here the null char at the end will not be copied!)
     memcpy(spi->sendbuf + 6, message->content, message->length);
-
-    // Calculate CRC [CRC-16/ARC over [MsgType] + [Register] + [ContentSize] + [Content], Polynomial: 0x8005, Initial value: 0x0000]
+    // 7. Calculate CRC [CRC-16/ARC over [MsgType] + [Register] + [ContentSize] + [Content], Polynomial: 0x8005, Initial value: 0x0000]
     uint16_t computed_checksum = 0;
     for (size_t i = 1; i < 6 + message->length; i++) {
         computed_checksum ^= (uint16_t)(spi->sendbuf[i]);
@@ -611,22 +685,17 @@ esp_err_t spi_encode_message(Spi *spi, SpiMessage *message) {
             }
         }
     }
-
-    // Copy CRC (big-endian)
+    // 8. Copy CRC (big-endian)
     spi->sendbuf[6 + message->length] = (computed_checksum >> 8) & 0x00FF;
     spi->sendbuf[7 + message->length] = computed_checksum & 0x00FF;
-
-    // Add end byte
+    // 9.Add end byte
     spi->sendbuf[8 + message->length] = 0xAA;
-    
-    // Clear up the message for next use
-    message->checksum = 0;
-    message->length = 0;
-    message->reg = 0;
-    message->type = 0;
-    message_setString(message, "");
 
-    return ESP_OK;
+    // free message to avoid memory leaks
+    cleanup:
+        if (message->content != NULL) free(message->content);
+        message->content = NULL;
+        return err;
 }
 
 
@@ -636,31 +705,6 @@ esp_err_t spi_receive_message(Spi *spi, SpiMessage *message) {
         ESP_LOGW(TAG, "Somthing went wrong while decoding message");
         return ESP_FAIL;
     }
-    message_log(message);
+    if (DEBUG_MODE) message_log(message);
     return ESP_OK;
-}
-
-
-esp_err_t spi_send_message(Spi *spi, SpiMessage *message) {
-    message_log(message);
-
-    if (spi_encode_message(spi, message)) {
-        return ESP_FAIL;
-    }
-
-    spi_slave_tx(spi);
-    message_setString(message, "");
-    return ESP_OK;
-}
-
-
-void send_error(Spi *spi, const char *tag, const char *error_text) {
-    SpiMessage message = {
-        .type = MSG_SLAVE_ERR
-    };
-
-    message_setString(&message, error_text);
-    spi_send_message(spi, &message);
-    ESP_LOGE(tag, "%s", error_text);
-
 }

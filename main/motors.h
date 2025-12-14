@@ -49,6 +49,7 @@ typedef struct {
     int center_duty;  /**< Duty cycle for center position */
     int min_duty;     /**< Duty cycle for minimum angle */
     int max_duty;     /**< Duty cycle for maximum angle */
+    float last_angle;
 } Servo;
 
 /**
@@ -75,7 +76,7 @@ esp_err_t servo_init(Servo *s);
  * @param target_speed Target speed [-1.0 .. 1.0].
  * @param debug If true, prints debug information to console.
  */
-void motor_set_speed(Motor *m, float target_speed, bool debug);
+void motor_set_speed(Motor *m, float target_speed);
 
 /**
  * @brief Stop the motor immediately by setting its speed to zero.
@@ -92,7 +93,7 @@ void motor_stop(Motor *m);
  * @param s Pointer to the Servo struct.
  * @param angle_deg Target angle in degrees.
  */
-void servo_sets_angle(Servo *s, float angle_deg);
+esp_err_t servo_sets_angle(Servo *s, float angle_deg);
 
 /**
  * @brief Initializes the relay pin.

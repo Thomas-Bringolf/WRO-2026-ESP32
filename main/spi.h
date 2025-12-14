@@ -229,7 +229,7 @@ float message_toFloat32(const SpiMessage *message);
  * @note The function allocates memory for message->content and frees
  *       any previously allocated content.
  */
-esp_err_t message_setString(SpiMessage *message, const char *str);
+esp_err_t message_sendString(Spi *spi, uint16_t reg, const char *fmt, ...);
 
 /**
  * @brief Set the content of a SpiMessage from a 16-bit unsigned integer.
@@ -246,7 +246,7 @@ esp_err_t message_setString(SpiMessage *message, const char *str);
  * - ESP_ERR_INVALID_ARG if message is NULL
  * - ESP_ERR_NO_MEM if memory allocation fails
  */
-esp_err_t message_setUint16(SpiMessage *message, uint16_t value);
+esp_err_t message_sendUint16(Spi *spi, uint16_t reg, uint16_t value);
 
 /**
  * @brief Set the content of a SpiMessage from a 32-bit signed integer.
@@ -263,7 +263,7 @@ esp_err_t message_setUint16(SpiMessage *message, uint16_t value);
  * - ESP_ERR_INVALID_ARG if message is NULL
  * - ESP_ERR_NO_MEM if memory allocation fails
  */
-esp_err_t message_setInt32(SpiMessage *message, int32_t value);
+esp_err_t message_sendInt32(Spi *spi, uint16_t reg, int32_t value);
 
 /**
  * @brief Set the content of a SpiMessage from a 32-bit floating point value.
@@ -282,7 +282,19 @@ esp_err_t message_setInt32(SpiMessage *message, int32_t value);
  *
  * @note Endianness is explicitly handled for cross-platform SPI communication.
  */
-esp_err_t message_setFloat32(SpiMessage *message, float value);
+esp_err_t message_sendFloat32(Spi *spi, uint16_t reg, float value);
+
+/**
+ * @brief Send SPI error message and ESP error log
+ * 
+ * @param[in] spi Pointer to the SPI interface structure.
+ * @param[in] tag tag value used for ESP_LOGE.
+ * @param error_text error message describing the error.
+ */
+esp_err_t message_sendError(Spi *spi, const char *tag, const char *fmt, ...);
+
+
+esp_err_t message_sendACK(Spi *spi);
 
 /**
  * @brief Log a decoded SpiMessage in a human-readable format.
@@ -395,6 +407,5 @@ esp_err_t spi_receive_message(Spi *spi, SpiMessage *message);
  */
 esp_err_t spi_send_message(Spi *spi, SpiMessage *message);
 
-void send_error(Spi *spi, const char *tag, const char *error_text);
 
 #endif // SPI_H

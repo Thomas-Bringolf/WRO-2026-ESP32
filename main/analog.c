@@ -72,45 +72,134 @@ esp_err_t analog_init(AnalogSensor *sensor)
     }
 
     // Initialize last voltages and conversion factors
-    for (int i = 0; i < ANALOG_CHANNELS; i++) {
+    for (int i = 0; i < 4; i++) {
         sensor->last_voltage[i] = 0.0f;
         if (sensor->conversion_factor[i] == 0.0f)
             sensor->conversion_factor[i] = 1.0f;
     }
 
-    ESP_LOGI(TAG, "ADS1015 initialized at I2C addr 0x%02X", sensor->i2c_addr);
+    // Debug ESP_LOGI(TAG, "ADS1015 initialized at I2C addr 0x%02X", sensor->i2c_addr);
     return ESP_OK;
 }
 
 
-esp_err_t analog_read(AnalogSensor *sensor)
+esp_err_t analog_read_all(AnalogSensor *sensor)
 {
     if (!sensor) {
-        ESP_LOGE(TAG, "analog_read(); NULL sensor pointer");
+        ESP_LOGE(TAG, "analog_read(): NULL sensor");
         return ESP_ERR_INVALID_ARG;
     }
-    for (int ch = 0; ch < ANALOG_CHANNELS; ch++)
-    {
-        // Select the channel
-        esp_err_t err = ads111x_set_input_mux(&sensor->dev, (ads111x_mux_t)(ch));
+
+    // Debug ESP_LOGI(TAG, "Analog read started (continuous mode)");
+
+    // Explicit mux mapping (important – do NOT rely on enum order blindly)
+    static const ads111x_mux_t mux_map[4] = {
+        ADS111X_MUX_1_GND,      //A0
+        ADS111X_MUX_2_GND,      //A1
+        ADS111X_MUX_3_GND,      //A2
+        ADS111X_MUX_0_GND       //A3
+    };
+
+    for (int ch = 0; ch < 4; ch++) {
+
+        // Select channel (starts new conversion automatically)
+        esp_err_t err = ads111x_set_input_mux(&sensor->dev, mux_map[ch]);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to set channel %d", ch);
+            ESP_LOGW(TAG, "Failed to set MUX channel %d", ch);
             continue;
         }
 
-        // Read raw value
-        int16_t raw = 0;
+        // Wait ~2 conversion cycles to flush old sample
+        // ADS1015 max rate = 3300 SPS → ~0.3 ms per sample
+        vTaskDelay(pdMS_TO_TICKS(1));
+
+        int16_t raw;
+
+        // First read: may be stale (discard)
         err = ads111x_get_value(&sensor->dev, &raw);
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to read channel %d", ch);
+            ESP_LOGW(TAG, "Discard read failed on ch %d", ch);
             continue;
         }
 
-        // Convert to voltage and apply per-channel factor
-        float voltage = (float)raw * sensor->gain_val / ADS111X_MAX_VALUE;
-        sensor->last_voltage[ch] = voltage * sensor->conversion_factor[ch];
+        // Second read: valid
+        err = ads111x_get_value(&sensor->dev, &raw);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "Read failed on ch %d", ch);
+            continue;
+        }
+
+        // ADS1015 = 12-bit signed value in bits [15:4]
+        raw >>= 4;
+
+        float voltage =
+            (float)raw * sensor->gain_val / 2048.0f;
+
+        sensor->last_voltage[ch] =
+            voltage * sensor->conversion_factor[ch];
+
+        ESP_LOGI(TAG,
+                 "CH%d raw=%d voltage=%.4f V",
+                 ch, raw, sensor->last_voltage[ch]);
     }
 
+    return ESP_OK;
+}
+
+
+esp_err_t analog_read_ch(AnalogSensor *sensor, int channel)
+{
+    if (!sensor) {
+        ESP_LOGE(TAG, "analog_read(): NULL sensor");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (channel < 0 || channel > 3) {
+        ESP_LOGE(TAG, "analog_read(): Channel out-of-range");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Mux remapping
+    static const ads111x_mux_t mux_map[4] = {
+        ADS111X_MUX_1_GND,      //A0
+        ADS111X_MUX_2_GND,      //A1
+        ADS111X_MUX_3_GND,      //A2
+        ADS111X_MUX_0_GND       //A3
+    };
+
+    // Select channel (starts new conversion automatically)
+    esp_err_t err = ads111x_set_input_mux(&sensor->dev, mux_map[channel]);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set MUX channel %d", channel);
+        return ESP_FAIL;
+    }
+
+    // Wait ~2 conversion cycles to flush old sample
+    // ADS1015 max rate = 3300 SPS → ~0.3 ms per sample
+    vTaskDelay(pdMS_TO_TICKS(1));
+    int16_t raw;
+    // First read: may be stale (discard)
+    err = ads111x_get_value(&sensor->dev, &raw);
+    err = ads111x_get_value(&sensor->dev, &raw);
+    err = ads111x_get_value(&sensor->dev, &raw);
+    err = ads111x_get_value(&sensor->dev, &raw);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Discard read failed on ch %d", channel);
+        return ESP_FAIL;
+    }
+
+    // Second read: valid
+    err = ads111x_get_value(&sensor->dev, &raw);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Read failed on ch %d", channel);
+        return ESP_FAIL;
+    }
+    // ADS1015 = 12-bit signed value in bits [15:4]
+    raw >>= 4;
+
+    float voltage = (float)raw * sensor->gain_val / 2048.0f;
+    sensor->last_voltage[channel] = voltage * sensor->conversion_factor[channel];
+    // Debug ESP_LOGI(TAG, "CH%d raw=%d voltage=%.4f V", channel, raw, sensor->last_voltage[channel]);
     return ESP_OK;
 }
 
@@ -131,7 +220,7 @@ esp_err_t analog_log(const AnalogSensor *sensor)
     ESP_LOGI(TAG, "SDA pin: %d, SCL pin: %d", sensor->sda_pin, sensor->scl_pin);
     ESP_LOGI(TAG, "Gain: %d, Gain voltage per bit: %.6f", sensor->gain, sensor->gain_val);
 
-    for (int ch = 0; ch < ANALOG_CHANNELS; ch++) {
+    for (int ch = 0; ch < 4; ch++) {
         ESP_LOGI(TAG, "  \033[36mChannel %d\033[0m: Voltage = \033[1;33m%.4f V\033[0m (factor: %.3f)",
                  ch,
                  sensor->last_voltage[ch],

@@ -116,7 +116,31 @@ esp_err_t analog_init(AnalogSensor *sensor);
  * @note Ensure that `analog_init()` was called successfully before calling
  *       this function. Conversion factors are applied automatically to each channel.
  */
-esp_err_t analog_read(AnalogSensor *sensor);
+esp_err_t analog_read_all(AnalogSensor *sensor);
+
+
+/**
+ * @brief Read one analog channel from the sensor and update `last_voltage`.
+ *
+ * This function a channel of the ADC, selects the input
+ * multiplexer for the channel, reads the raw ADC value, converts it to
+ * voltage using the configured gain and per-channel conversion factor,
+ * and stores it in `sensor->last_voltage`.
+ *
+ * Logging is performed for any read failures, allowing the tracing
+ * any failed during a measurement.
+ *
+ * @param sensor Pointer to a properly initialized AnalogSensor structure.
+ *
+ * @return
+ *      - ESP_OK: Channel successfully read and stored.
+ *      - ESP_ERR_INVALID_ARG: `sensor` is NULL or Channel is invalide
+ *      - Other ESP_ERR_* codes may occur if I²C communication fails.
+ *
+ * @note Ensure that `analog_init()` was called successfully before calling
+ *       this function. Conversion factors are applied automatically to each channel.
+ */
+esp_err_t analog_read_ch(AnalogSensor *sensor, int channel);
 
 
 /**
